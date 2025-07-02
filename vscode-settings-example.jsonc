@@ -1,0 +1,37 @@
+{
+  // GitHub Copilot Instructions の有効化
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  
+  // その他の推奨設定
+  "github.copilot.enable": {
+    "*": true,
+    "yaml": false,
+    "plaintext": false,
+    "markdown": true
+  },
+  
+  // Copilot Chat 設定
+  "github.copilot.chat.welcomeMessage": "never",
+  "github.copilot.editor.enableAutoCompletions": true,
+  
+  // プロジェクト固有の設定も追加可能
+  "python.defaultInterpreterPath": "./venv/bin/python",
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": true,
+  "python.formatting.provider": "black",
+  
+  // エディタ設定
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  },
+  
+  // ファイル除外設定
+  "files.exclude": {
+    "**/.venv": true,
+    "**/venv": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  }
+} 

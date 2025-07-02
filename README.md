@@ -24,18 +24,72 @@ cursor-rules-template/
 │   ├── task-request/           # タスク依頼書テンプレート
 │   ├── feature-spec/           # 機能設計書テンプレート
 │   └── README.md              # テンプレート使用ガイド
+├── setup-rules.sh              # 自動セットアップスクリプト
 └── README.md                   # このファイル
 ```
 
 ## 🚀 セットアップ手順
 
-### 1. プロジェクトの取得
+### 🔥 方法1: 自動セットアップスクリプト（推奨）
+
+**一番簡単で確実な方法です！**
+
+#### ステップ1: スクリプト実行
+```bash
+# ai-rules-templateディレクトリから実行
+./setup-rules.sh <対象プロジェクトのパス>
+
+# 例：隣接するプロジェクトにセットアップ
+./setup-rules.sh ../my-backend-project
+
+# 例：絶対パスでプロジェクトを指定
+./setup-rules.sh /Users/username/projects/my-app
+```
+
+#### ステップ2: セットアップ内容の確認
+スクリプトが以下を自動実行します：
+
+1. **Cursorルールのコピー**: `.cursor/rules/` ディレクトリと全ルールファイル
+2. **ドキュメントテンプレートのコピー**: `docs/` 配下にテンプレートファイル（任意）
+3. **`.gitignore` の更新**: `.cursor/` ディレクトリを除外設定に追加（任意）
+
+#### ステップ3: Cursor エディタで開く
+```bash
+# 対象プロジェクトをCursorで開く
+cursor <対象プロジェクトのパス>
+```
+
+**🎉 これだけで完了です！** すぐにAI機能を使って設計書が作成できます。
+
+#### スクリプトオプション
+```bash
+# ヘルプ表示
+./setup-rules.sh --help
+
+# 既存ファイルを強制上書き
+./setup-rules.sh --force ../my-project
+```
+
+### 📋 方法2: 手動セットアップ
+
+手動でセットアップしたい場合：
+
+#### ステップ1: プロジェクトの取得
 ```bash
 git clone <repository-url>
 cd cursor-rules-template
 ```
 
-### 2. Cursor エディタで開く
+#### ステップ2: ルールファイルを対象プロジェクトにコピー
+```bash
+# 対象プロジェクトに.cursorディレクトリを作成
+mkdir -p /path/to/your/project/.cursor/rules
+
+# ルールファイルをコピー
+cp -r .cursor/rules/* /path/to/your/project/.cursor/rules/
+```
+
+#### ステップ3: Cursor エディタで開く
 1. Cursor エディタを起動
 2. `File > Open Folder` でプロジェクトディレクトリを開く
 3. `.cursor/rules/` 内のルールファイルが自動的に読み込まれます
@@ -303,3 +357,103 @@ APIのリクエスト・レスポンス例を追加してください
 
 このガイドを参考に、効率的で高品質なドキュメント作成を実践してください！  
 不明な点があれば、チーム内で相談・共有をお願いします。
+
+## セットアップ方法
+
+### 方法1: Cursor エディタ用（推奨）
+
+自動セットアップスクリプトを使用：
+
+```bash
+# ai-rules-template ディレクトリで実行
+./setup-rules.sh <対象プロジェクトのパス>
+
+# 例
+./setup-rules.sh ../my-project
+./setup-rules.sh /path/to/your/project
+```
+
+### 方法2: GitHub Copilot（VS Code）用
+
+GitHub Copilot用のInstructionsファイルを設定：
+
+```bash
+# ai-rules-template ディレクトリで実行
+./setup-copilot.sh <対象プロジェクトのパス>
+
+# 例
+./setup-copilot.sh ../my-project
+./setup-copilot.sh /path/to/your/project
+```
+
+#### GitHub Copilot の設定手順
+
+1. スクリプト実行後、VS Codeで対象プロジェクトを開く
+2. 設定で以下を有効にする：
+   - `github.copilot.chat.codeGeneration.useInstructionFiles`: true
+3. GitHub Copilotでコード生成時に自動的にルールが適用されます
+
+#### オプション
+
+- `--symlink` (推奨): シンボリックリンクでルールを連携
+- `--copy`: ファイルをコピー（ルール更新時は手動再実行が必要）
+- `--force`: 既存ファイルを強制上書き
+
+#### ルール更新時
+
+シンボリックリンク使用時は、以下で全プロジェクトに更新を反映：
+
+```bash
+./update-copilot-instructions.sh
+```
+
+### 方法3: 手動セットアップ（Cursor用）
+
+手動でセットアップしたい場合：
+
+#### ステップ1: プロジェクトの取得
+```bash
+git clone <repository-url>
+cd cursor-rules-template
+```
+
+#### ステップ2: ルールファイルを対象プロジェクトにコピー
+```bash
+# 対象プロジェクトに.cursorディレクトリを作成
+mkdir -p /path/to/your/project/.cursor/rules
+
+# ルールファイルをコピー
+cp -r .cursor/rules/* /path/to/your/project/.cursor/rules/
+```
+
+#### ステップ3: Cursor エディタで開く
+1. Cursor エディタを起動
+2. `File > Open Folder` でプロジェクトディレクトリを開く
+3. `.cursor/rules/` 内のルールファイルが自動的に読み込まれます
+
+## 使用例
+
+### Cursor エディタでの使用
+
+# ... existing code ...
+
+### VS Code + GitHub Copilot での使用
+
+1. プロジェクトで `./setup-copilot.sh` を実行
+2. VS Codeでプロジェクトを開く
+3. GitHub Copilotの設定を有効化
+4. チャットやコード補完時に自動的にルールが適用される
+
+### ルール管理
+
+- **共通ルール**: `.cursor/rules/base.mdc`
+- **言語固有ルール**: `.cursor/rules/backend-python.mdc` など
+- **文書作成ルール**: `.cursor/rules/feature-spec.mdc`, `task-request.mdc`
+
+ルールを更新した場合：
+- Cursor用: 自動的に反映
+- Copilot用: `./update-copilot-instructions.sh` を実行
+
+## 利点
+
+# ... existing code ...

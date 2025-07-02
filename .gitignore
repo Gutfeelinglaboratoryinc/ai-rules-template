@@ -43,3 +43,6 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# AI Rules Template - Auto Generated Files
+generated-copilot-instructions.md

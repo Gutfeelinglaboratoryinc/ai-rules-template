@@ -13,7 +13,7 @@ alwaysApply: false
 ## Python バージョン・環境管理
 
 ### Python バージョン
-- **対象バージョン**: Python 3.9+ 推奨（3.11+ 最適）
+- **対象バージョン**: Python 3.12+ 推奨
 - **バージョン固定**: `.python-version` または `pyproject.toml` で明示
 - **互換性確保**: 複数バージョンでのテスト実施
 
@@ -747,3 +747,4 @@ gunicorn app.main:app \
 
 このPythonルールに従って開発することで、
 保守性が高く、Pythonic で高品質なバックエンドアプリケーションを構築できます。
+
