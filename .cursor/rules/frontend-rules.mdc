@@ -1,0 +1,777 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# フロントエンド開発ルール
+
+## 適用条件
+- ファイルパス：`src/frontend/**/*.vue`, `src/components/**/*.tsx`, `client/**/*.js`
+- フロントエンド・クライアントサイド開発時に適用
+
+## アーキテクチャパターン
+
+### ディレクトリ構成
+```
+src/frontend/
+├── components/          # 再利用可能コンポーネント
+│   ├── atoms/          # 最小単位コンポーネント（ボタン、入力欄）
+│   ├── molecules/      # 原子の組み合わせ（検索ボックス、カード）
+│   └── organisms/      # 分子の組み合わせ（ヘッダー、フォーム）
+├── pages/              # ページレベルコンポーネント
+├── layouts/            # レイアウトコンポーネント
+├── stores/             # 状態管理（Vuex/Pinia/Redux）
+├── services/           # API通信・外部サービス
+├── utils/              # ユーティリティ関数
+├── types/              # TypeScript型定義
+├── hooks/              # カスタムフック（React）
+├── composables/        # コンポーザブル関数（Vue）
+└── assets/             # 静的リソース
+    ├── images/
+    ├── styles/
+    └── fonts/
+```
+
+### Atomic Design原則
+- **Atoms**：単一責務、プロパティで制御
+- **Molecules**：Atomsの組み合わせ、特定機能を持つ
+- **Organisms**：複雑なUI部品、独立性を保つ
+- **Pages**：画面単位、ルーティングと紐づく
+
+## コーディング規則
+
+### ファイル命名
+- **Vue コンポーネント**：`PascalCase.vue` (例：`UserProfile.vue`)
+- **React コンポーネント**：`PascalCase.tsx` (例：`UserProfile.tsx`)
+- **ページ**：`[route-name].vue` (例：`user-profile.vue`)
+- **ストア**：`[resource]Store.ts` (例：`userStore.ts`)
+- **サービス**：`[resource]Service.ts` (例：`userService.ts`)
+- **型定義**：`[resource]Types.ts` (例：`userTypes.ts`)
+
+### コンポーネント設計
+
+#### Vue 3 Composition API
+```vue
+<template>
+  <div class="user-profile">
+    <h2 class="user-profile__title">{{ user.name }}</h2>
+    <p class="user-profile__email">{{ user.email }}</p>
+    <button 
+      class="user-profile__edit-btn"
+      @click="handleEdit"
+      :disabled="isLoading"
+    >
+      編集
+    </button>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import type { User } from '@/types/userTypes'
+
+// Props定義
+interface Props {
+  userId: string
+  readonly?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  readonly: false
+})
+
+// Emits定義
+interface Emits {
+  (event: 'edit', user: User): void
+  (event: 'delete', userId: string): void
+}
+
+const emit = defineEmits<Emits>()
+
+// リアクティブデータ
+const user = ref<User | null>(null)
+const isLoading = ref(false)
+
+// 算出プロパティ
+const canEdit = computed(() => !props.readonly && !isLoading.value)
+
+// メソッド
+const fetchUser = async (): Promise<void> => {
+  isLoading.value = true
+  try {
+    // API呼び出し
+    user.value = await userService.getUser(props.userId)
+  } catch (error) {
+    console.error('Failed to fetch user:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handleEdit = (): void => {
+  if (user.value && canEdit.value) {
+    emit('edit', user.value)
+  }
+}
+
+// ライフサイクル
+onMounted(() => {
+  fetchUser()
+})
+</script>
+
+<style scoped lang="scss">
+.user-profile {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  
+  &__title {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+  
+  &__email {
+    margin: 0 0 1rem;
+    color: #666;
+  }
+  
+  &__edit-btn {
+    padding: 0.5rem 1rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    
+    &:hover:not(:disabled) {
+      background-color: #0056b3;
+    }
+    
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+</style>
+```
+
+#### React + TypeScript
+```tsx
+import React, { useState, useEffect, useCallback } from 'react'
+import type { User } from '@/types/userTypes'
+
+interface UserProfileProps {
+  userId: string
+  readonly?: boolean
+  onEdit?: (user: User) => void
+  onDelete?: (userId: string) => void
+}
+
+export const UserProfile: React.FC<UserProfileProps> = ({
+  userId,
+  readonly = false,
+  onEdit,
+  onDelete
+}) => {
+  const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const fetchUser = useCallback(async (): Promise<void> => {
+    setIsLoading(true)
+    try {
+      const userData = await userService.getUser(userId)
+      setUser(userData)
+    } catch (error) {
+      console.error('Failed to fetch user:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId])
+
+  const handleEdit = useCallback((): void => {
+    if (user && !readonly && !isLoading && onEdit) {
+      onEdit(user)
+    }
+  }, [user, readonly, isLoading, onEdit])
+
+  useEffect(() => {
+    fetchUser()
+  }, [fetchUser])
+
+  if (!user) {
+    return <div>Loading...</div>
+  }
+
+  return (
+    <div className="user-profile">
+      <h2 className="user-profile__title">{user.name}</h2>
+      <p className="user-profile__email">{user.email}</p>
+      <button 
+        className="user-profile__edit-btn"
+        onClick={handleEdit}
+        disabled={readonly || isLoading}
+      >
+        編集
+      </button>
+    </div>
+  )
+}
+```
+
+## 状態管理
+
+### Pinia (Vue)
+```typescript
+// stores/userStore.ts
+import { defineStore } from 'pinia'
+import type { User } from '@/types/userTypes'
+
+interface UserState {
+  users: User[]
+  currentUser: User | null
+  isLoading: boolean
+  error: string | null
+}
+
+export const useUserStore = defineStore('user', {
+  state: (): UserState => ({
+    users: [],
+    currentUser: null,
+    isLoading: false,
+    error: null
+  }),
+
+  getters: {
+    getUserById: (state) => (id: string): User | undefined => {
+      return state.users.find(user => user.id === id)
+    },
+    
+    isAuthenticated: (state): boolean => {
+      return state.currentUser !== null
+    }
+  },
+
+  actions: {
+    async fetchUsers(): Promise<void> {
+      this.isLoading = true
+      this.error = null
+      
+      try {
+        this.users = await userService.getUsers()
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Unknown error'
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async createUser(userData: CreateUserData): Promise<void> {
+      try {
+        const newUser = await userService.createUser(userData)
+        this.users.push(newUser)
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Failed to create user'
+        throw error
+      }
+    }
+  }
+})
+```
+
+### Zustand (React)
+```typescript
+// stores/userStore.ts
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
+import type { User } from '@/types/userTypes'
+
+interface UserState {
+  users: User[]
+  currentUser: User | null
+  isLoading: boolean
+  error: string | null
+  
+  // Actions
+  fetchUsers: () => Promise<void>
+  createUser: (userData: CreateUserData) => Promise<void>
+  setCurrentUser: (user: User | null) => void
+  clearError: () => void
+}
+
+export const useUserStore = create<UserState>()(
+  devtools(
+    (set, get) => ({
+      users: [],
+      currentUser: null,
+      isLoading: false,
+      error: null,
+
+      fetchUsers: async () => {
+        set({ isLoading: true, error: null })
+        
+        try {
+          const users = await userService.getUsers()
+          set({ users, isLoading: false })
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Unknown error',
+            isLoading: false 
+          })
+        }
+      },
+
+      createUser: async (userData) => {
+        try {
+          const newUser = await userService.createUser(userData)
+          set(state => ({ users: [...state.users, newUser] }))
+        } catch (error) {
+          set({ error: error instanceof Error ? error.message : 'Failed to create user' })
+          throw error
+        }
+      },
+
+      setCurrentUser: (user) => set({ currentUser: user }),
+      clearError: () => set({ error: null })
+    }),
+    { name: 'user-store' }
+  )
+)
+```
+
+## API通信・サービス層
+
+### APIサービス設計
+```typescript
+// services/apiService.ts
+import axios, { AxiosInstance, AxiosResponse } from 'axios'
+
+class ApiService {
+  private client: AxiosInstance
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: process.env.VUE_APP_API_BASE_URL || '/api/v1',
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    this.setupInterceptors()
+  }
+
+  private setupInterceptors(): void {
+    // リクエストインターセプター
+    this.client.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('authToken')
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
+        return config
+      },
+      (error) => Promise.reject(error)
+    )
+
+    // レスポンスインターセプター
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          // 認証エラー時の処理
+          localStorage.removeItem('authToken')
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  async get<T>(url: string, params?: any): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.get(url, { params })
+    return response.data
+  }
+
+  async post<T>(url: string, data?: any): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.post(url, data)
+    return response.data
+  }
+
+  async put<T>(url: string, data?: any): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.put(url, data)
+    return response.data
+  }
+
+  async delete<T>(url: string): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.delete(url)
+    return response.data
+  }
+}
+
+export const apiService = new ApiService()
+```
+
+### リソース固有サービス
+```typescript
+// services/userService.ts
+import { apiService } from './apiService'
+import type { User, CreateUserData, UpdateUserData } from '@/types/userTypes'
+
+interface ApiResponse<T> {
+  status: 'success' | 'error'
+  data: T
+  message?: string
+}
+
+interface PaginatedResponse<T> {
+  status: 'success'
+  data: T[]
+  pagination: {
+    currentPage: number
+    totalPages: number
+    totalCount: number
+  }
+}
+
+class UserService {
+  async getUsers(page = 1, limit = 20): Promise<PaginatedResponse<User>> {
+    return apiService.get<PaginatedResponse<User>>('/users', { page, limit })
+  }
+
+  async getUser(id: string): Promise<User> {
+    const response = await apiService.get<ApiResponse<User>>(`/users/${id}`)
+    return response.data
+  }
+
+  async createUser(userData: CreateUserData): Promise<User> {
+    const response = await apiService.post<ApiResponse<User>>('/users', userData)
+    return response.data
+  }
+
+  async updateUser(id: string, userData: UpdateUserData): Promise<User> {
+    const response = await apiService.put<ApiResponse<User>>(`/users/${id}`, userData)
+    return response.data
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await apiService.delete(`/users/${id}`)
+  }
+}
+
+export const userService = new UserService()
+```
+
+## CSS/スタイリング
+
+### BEM記法 + SCSS
+```scss
+// components/UserCard.scss
+.user-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  
+  // Element
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  
+  &__title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+  }
+  
+  &__subtitle {
+    font-size: 0.875rem;
+    color: #666;
+    margin: 0.25rem 0 0;
+  }
+  
+  &__body {
+    flex: 1;
+    margin-bottom: 1rem;
+  }
+  
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+  
+  // Modifier
+  &--loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  
+  &--error {
+    border-color: #dc3545;
+    background-color: #ffeaa7;
+  }
+  
+  // 状態に応じたスタイル
+  &:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+  }
+}
+
+// レスポンシブ対応
+@media (max-width: 768px) {
+  .user-card {
+    padding: 0.75rem;
+    
+    &__actions {
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+  }
+}
+```
+
+### CSS Variables（カスタムプロパティ）
+```scss
+// assets/styles/variables.scss
+:root {
+  // カラーパレット
+  --color-primary: #007bff;
+  --color-primary-dark: #0056b3;
+  --color-secondary: #6c757d;
+  --color-success: #28a745;
+  --color-danger: #dc3545;
+  --color-warning: #ffc107;
+  --color-info: #17a2b8;
+  
+  // グレースケール
+  --color-gray-100: #f8f9fa;
+  --color-gray-200: #e9ecef;
+  --color-gray-300: #dee2e6;
+  --color-gray-500: #adb5bd;
+  --color-gray-700: #495057;
+  --color-gray-900: #212529;
+  
+  // フォント
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-base: 1rem;
+  --font-size-sm: 0.875rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  
+  // スペーシング
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  // ブレークポイント
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+}
+```
+
+## パフォーマンス最適化
+
+### 遅延ローディング
+```typescript
+// Vue Router遅延ローディング
+const routes = [
+  {
+    path: '/users',
+    name: 'Users',
+    component: () => import('@/pages/Users.vue')
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/pages/Profile.vue')
+  }
+]
+
+// React Router遅延ローディング
+import { lazy, Suspense } from 'react'
+
+const Users = lazy(() => import('@/pages/Users'))
+const Profile = lazy(() => import('@/pages/Profile'))
+
+const App = () => (
+  <Suspense fallback={<div>Loading...</div>}>
+    <Routes>
+      <Route path="/users" element={<Users />} />
+      <Route path="/profile" element={<Profile />} />
+    </Routes>
+  </Suspense>
+)
+```
+
+### メモ化・キャッシュ
+```vue
+<!-- Vue：算出プロパティとメモ化 -->
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+
+const users = ref<User[]>([])
+const searchQuery = ref('')
+
+// 算出プロパティ（自動メモ化）
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value
+  
+  return users.value.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+})
+</script>
+```
+
+```tsx
+// React：useMemoとuseCallback
+import React, { useMemo, useCallback, useState } from 'react'
+
+const UserList: React.FC<{ users: User[] }> = ({ users }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // 重い計算のメモ化
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery) return users
+    
+    return users.filter(user =>
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [users, searchQuery])
+
+  // 関数のメモ化
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query)
+  }, [])
+
+  return (
+    <div>
+      <SearchInput onSearch={handleSearch} />
+      {filteredUsers.map(user => (
+        <UserCard key={user.id} user={user} />
+      ))}
+    </div>
+  )
+}
+```
+
+## テスト実装
+
+### コンポーネントテスト（Vue Test Utils）
+```typescript
+// UserProfile.test.ts
+import { mount } from '@vue/test-utils'
+import UserProfile from '@/components/UserProfile.vue'
+import { createPinia } from 'pinia'
+
+describe('UserProfile', () => {
+  let wrapper: any
+  
+  beforeEach(() => {
+    wrapper = mount(UserProfile, {
+      props: {
+        userId: '123'
+      },
+      global: {
+        plugins: [createPinia()]
+      }
+    })
+  })
+
+  test('ユーザー情報を正しく表示する', async () => {
+    // Arrange
+    const mockUser = {
+      id: '123',
+      name: 'Test User',
+      email: 'test@example.com'
+    }
+    
+    // Act
+    await wrapper.setData({ user: mockUser })
+    
+    // Assert
+    expect(wrapper.find('.user-profile__title').text()).toBe('Test User')
+    expect(wrapper.find('.user-profile__email').text()).toBe('test@example.com')
+  })
+
+  test('編集ボタンクリック時にemitが発火する', async () => {
+    // Arrange
+    const mockUser = { id: '123', name: 'Test', email: 'test@example.com' }
+    await wrapper.setData({ user: mockUser })
+    
+    // Act
+    await wrapper.find('.user-profile__edit-btn').trigger('click')
+    
+    // Assert
+    expect(wrapper.emitted('edit')).toBeTruthy()
+    expect(wrapper.emitted('edit')[0]).toEqual([mockUser])
+  })
+})
+```
+
+### E2Eテスト（Playwright）
+```typescript
+// tests/e2e/user-management.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.describe('ユーザー管理機能', () => {
+  test.beforeEach(async ({ page }) => {
+    // ログイン処理
+    await page.goto('/login')
+    await page.fill('[data-testid="email"]', 'admin@example.com')
+    await page.fill('[data-testid="password"]', 'password')
+    await page.click('[data-testid="login-button"]')
+    await expect(page).toHaveURL('/dashboard')
+  })
+
+  test('ユーザー一覧の表示', async ({ page }) => {
+    await page.goto('/users')
+    
+    // ユーザー一覧が表示されることを確認
+    await expect(page.locator('[data-testid="user-list"]')).toBeVisible()
+    await expect(page.locator('[data-testid="user-item"]')).toHaveCount(5)
+  })
+
+  test('新規ユーザー作成', async ({ page }) => {
+    await page.goto('/users')
+    
+    // 新規作成ボタンをクリック
+    await page.click('[data-testid="create-user-button"]')
+    
+    // フォーム入力
+    await page.fill('[data-testid="user-name"]', 'New User')
+    await page.fill('[data-testid="user-email"]', 'newuser@example.com')
+    await page.fill('[data-testid="user-password"]', 'Password123')
+    
+    // 保存
+    await page.click('[data-testid="save-button"]')
+    
+    // 成功メッセージの確認
+    await expect(page.locator('[data-testid="success-message"]')).toBeVisible()
+    await expect(page.locator('[data-testid="success-message"]')).toContainText('ユーザーが作成されました')
+  })
+})
+```
+
+---
+
+このルールに従ってフロントエンド開発を行うことで、
+保守性が高く、ユーザビリティに優れたWebアプリケーションを構築できます。
