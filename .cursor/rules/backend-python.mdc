@@ -1,5 +1,749 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Python バックエンド開発ルール
+
+## 適用条件
+- ファイルパス：`**/*.py`, `src/backend/**/*.py`, `app/**/*.py`
+- Python バックエンド・サーバーサイド開発時に適用
+- 共通ルールは `backend-common.mdc` を参照
+
+## Python バージョン・環境管理
+
+### Python バージョン
+- **対象バージョン**: Python 3.9+ 推奨（3.11+ 最適）
+- **バージョン固定**: `.python-version` または `pyproject.toml` で明示
+- **互換性確保**: 複数バージョンでのテスト実施
+
+### 仮想環境管理
+```bash
+# Poetry（推奨）
+poetry new project-name
+poetry install
+poetry add package-name
+poetry add --group dev package-name  # 開発依存
+
+# venv（シンプル）
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+```
+
+### 依存関係管理
+```toml
+# pyproject.toml (Poetry使用時)
+[tool.poetry]
+name = "your-api"
+version = "0.1.0"
+description = "Your API description"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+sqlalchemy = "^2.0.0"
+pydantic = "^2.5.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.0.0"
+ruff = "^0.1.0"
+mypy = "^1.7.0"
+```
+
+## コーディング規則（PEP 8準拠）
+
+### 命名規則
+```python
+# ファイル名：snake_case
+user_service.py
+product_controller.py
+database_config.py
+
+# 変数・関数名：snake_case
+user_name = "John"
+def get_user_by_id(user_id: int) -> User | None:
+    pass
+
+# クラス名：PascalCase
+class UserService:
+    pass
+
+class ProductRepository:
+    pass
+
+# 定数：SCREAMING_SNAKE_CASE
+MAX_RETRY_COUNT = 3
+API_BASE_URL = "https://api.example.com"
+
+# プライベート：先頭アンダースコア
+def _validate_input(data: dict) -> bool:
+    pass
+
+class UserService:
+    def __init__(self):
+        self._db_session = None  # プライベート属性
+```
+
+### インポート順序（PEP 8 + isort）
+```python
+# 1. 標準ライブラリ
+import os
+import sys
+from datetime import datetime
+from typing import List, Optional
+
+# 2. サードパーティライブラリ
+import uvicorn
+from fastapi import FastAPI, Depends
+from sqlalchemy import create_engine
+from pydantic import BaseModel
+
+# 3. ローカルアプリケーション
+from app.config import settings
+from app.models.user import User
+from app.services.user_service import UserService
+```
+
+### 型ヒント（Type Hints）必須
+```python
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel
+
+# 基本的な型ヒント
+def get_user_name(user_id: int) -> str:
+    pass
+
+def get_users(limit: int = 10) -> List[User]:
+    pass
+
+def find_user(user_id: int) -> Optional[User]:
+    pass
+
+# Union型（Python 3.10+では | 使用可能）
+def get_user_data(user_id: int) -> Union[User, None]:
+    pass
+
+# Python 3.10+の新記法
+def get_user_data(user_id: int) -> User | None:
+    pass
+
+# 複雑な型
+UserDict = Dict[str, Any]
+def process_users(users: List[UserDict]) -> Dict[str, List[str]]:
+    pass
+
+# Pydantic モデルでの型定義
+class CreateUserRequest(BaseModel):
+    name: str
+    email: str
+    age: Optional[int] = None
+    is_active: bool = True
+```
+
+## FastAPI 実装パターン
+
+### プロジェクト構成
+```
+app/
+├── __init__.py
+├── main.py              # FastAPI アプリケーション
+├── config.py            # 設定管理
+├── dependencies.py      # 依存性注入
+├── models/              # SQLAlchemy モデル
+│   ├── __init__.py
+│   ├── base.py
+│   └── user.py
+├── schemas/             # Pydantic スキーマ
+│   ├── __init__.py
+│   └── user.py
+├── controllers/         # APIルーター
+│   ├── __init__.py
+│   └── user_controller.py
+├── services/            # ビジネスロジック
+│   ├── __init__.py
+│   └── user_service.py
+├── repositories/        # データアクセス
+│   ├── __init__.py
+│   └── user_repository.py
+└── utils/               # ユーティリティ
+    ├── __init__.py
+    └── auth.py
+```
+
+### FastAPI アプリケーション設定
+```python
+# main.py
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
+from app.controllers import user_controller
+
+def create_app() -> FastAPI:
+    """FastAPIアプリケーションを作成"""
+    app = FastAPI(
+        title="Your API",
+        description="API description",
+        version="1.0.0",
+        docs_url="/docs" if settings.ENVIRONMENT != "production" else None
+    )
+    
+    # CORS設定
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"]
+    )
+    
+    # ルーター登録
+    app.include_router(
+        user_controller.router,
+        prefix="/api/v1/users",
+        tags=["users"]
+    )
+    
+    return app
+
+app = create_app()
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG
+    )
+```
+
+### コントローラー実装
+```python
+# controllers/user_controller.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+from app.schemas.user import UserResponse, CreateUserRequest, UpdateUserRequest
+from app.services.user_service import UserService
+from app.dependencies import get_user_service
+
+router = APIRouter()
+
+@router.get("/", response_model=List[UserResponse])
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    user_service: UserService = Depends(get_user_service)
+) -> List[UserResponse]:
+    """ユーザー一覧取得"""
+    users = await user_service.get_users(skip=skip, limit=limit)
+    return [UserResponse.from_orm(user) for user in users]
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service)
+) -> UserResponse:
+    """個別ユーザー取得"""
+    user = await user_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return UserResponse.from_orm(user)
+
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: CreateUserRequest,
+    user_service: UserService = Depends(get_user_service)
+) -> UserResponse:
+    """ユーザー作成"""
+    try:
+        user = await user_service.create_user(user_data)
+        return UserResponse.from_orm(user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+```
+
+### Pydantic スキーマ定義
+```python
+# schemas/user.py
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
+from datetime import datetime
+
+class UserBase(BaseModel):
+    """ユーザー基底スキーマ"""
+    name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    is_active: bool = True
+
+class CreateUserRequest(UserBase):
+    """ユーザー作成リクエスト"""
+    password: str = Field(..., min_length=8)
+
+class UpdateUserRequest(BaseModel):
+    """ユーザー更新リクエスト"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+
+class UserResponse(UserBase):
+    """ユーザーレスポンス"""
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True  # SQLAlchemy ORM対応
+```
+
+### SQLAlchemy モデル定義
+```python
+# models/user.py
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.sql import func
+from app.models.base import Base
+
+class User(Base):
+    """ユーザーモデル"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email='{self.email}')>"
+```
+
+### サービス層実装
+```python
+# services/user_service.py
+from typing import List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.schemas.user import CreateUserRequest, UpdateUserRequest
+from app.utils.auth import hash_password
+
+class UserService:
+    """ユーザーサービス"""
+    
+    def __init__(self, db: AsyncSession):
+        self.repository = UserRepository(db)
+    
+    async def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+        """ユーザー一覧取得"""
+        return await self.repository.get_all(skip=skip, limit=limit)
+    
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """ID指定でユーザー取得"""
+        return await self.repository.get_by_id(user_id)
+    
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """メールアドレス指定でユーザー取得"""
+        return await self.repository.get_by_email(email)
+    
+    async def create_user(self, user_data: CreateUserRequest) -> User:
+        """ユーザー作成"""
+        # 重複チェック
+        existing_user = await self.get_user_by_email(user_data.email)
+        if existing_user:
+            raise ValueError("Email already registered")
+        
+        # パスワードハッシュ化
+        password_hash = hash_password(user_data.password)
+        
+        # ユーザー作成
+        user = User(
+            name=user_data.name,
+            email=user_data.email,
+            password_hash=password_hash,
+            is_active=user_data.is_active
+        )
+        
+        return await self.repository.create(user)
+    
+    async def update_user(self, user_id: int, user_data: UpdateUserRequest) -> Optional[User]:
+        """ユーザー更新"""
+        user = await self.get_user_by_id(user_id)
+        if not user:
+            return None
+        
+        # 更新データの適用
+        update_data = user_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(user, field, value)
+        
+        return await self.repository.update(user)
+```
+
+### リポジトリ層実装
+```python
+# repositories/user_repository.py
+from typing import List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.user import User
+
+class UserRepository:
+    """ユーザーリポジトリ"""
+    
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    async def get_all(self, skip: int = 0, limit: int = 100) -> List[User]:
+        """全ユーザー取得"""
+        stmt = select(User).offset(skip).limit(limit)
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+    
+    async def get_by_id(self, user_id: int) -> Optional[User]:
+        """ID指定でユーザー取得"""
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def get_by_email(self, email: str) -> Optional[User]:
+        """メールアドレス指定でユーザー取得"""
+        stmt = select(User).where(User.email == email)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def create(self, user: User) -> User:
+        """ユーザー作成"""
+        self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+    
+    async def update(self, user: User) -> User:
+        """ユーザー更新"""
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+    
+    async def delete(self, user: User) -> None:
+        """ユーザー削除"""
+        await self.db.delete(user)
+        await self.db.commit()
+```
+
+## 設定管理
+
+### Pydantic Settings
+```python
+# config.py
+from pydantic_settings import BaseSettings
+from typing import List
+
+class Settings(BaseSettings):
+    """アプリケーション設定"""
+    
+    # アプリケーション設定
+    APP_NAME: str = "Your API"
+    DEBUG: bool = False
+    ENVIRONMENT: str = "development"
+    
+    # データベース設定
+    DATABASE_URL: str = "postgresql+asyncpg://user:pass@localhost/db"
+    
+    # セキュリティ設定
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # CORS設定
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    
+    # Redis設定
+    REDIS_URL: str = "redis://localhost:6379"
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+settings = Settings()
+```
+
+## テスト実装（pytest）
+
+### テスト設定
+```python
+# conftest.py
+import pytest
+import asyncio
+from typing import AsyncGenerator
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from app.main import app
+from app.models.base import Base
+from app.dependencies import get_database
+
+# テスト用データベース
+TEST_DATABASE_URL = "postgresql+asyncpg://test:test@localhost/test_db"
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """イベントループ作成"""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture(scope="session")
+async def db_engine():
+    """テスト用DBエンジン"""
+    engine = create_async_engine(TEST_DATABASE_URL)
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield engine
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    
+    await engine.dispose()
+
+@pytest.fixture
+async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
+    """テスト用DBセッション"""
+    async_session = sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    
+    async with async_session() as session:
+        yield session
+        await session.rollback()
+
+@pytest.fixture
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """テスト用HTTPクライアント"""
+    def get_test_db():
+        return db_session
+    
+    app.dependency_overrides[get_database] = get_test_db
+    
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+    
+    app.dependency_overrides.clear()
+```
+
+### 単体テスト例
+```python
+# tests/test_user_service.py
+import pytest
+from unittest.mock import AsyncMock, Mock
+from app.services.user_service import UserService
+from app.schemas.user import CreateUserRequest
+from app.models.user import User
+
+@pytest.mark.asyncio
+class TestUserService:
+    """ユーザーサービステスト"""
+    
+    async def test_create_user_success(self):
+        """ユーザー作成成功テスト"""
+        # Given
+        mock_db = AsyncMock()
+        service = UserService(mock_db)
+        service.repository = AsyncMock()
+        service.repository.get_by_email.return_value = None  # 重複なし
+        
+        user_data = CreateUserRequest(
+            name="Test User",
+            email="test@example.com",
+            password="password123",
+            is_active=True
+        )
+        
+        expected_user = User(
+            id=1,
+            name="Test User",
+            email="test@example.com",
+            is_active=True
+        )
+        service.repository.create.return_value = expected_user
+        
+        # When
+        result = await service.create_user(user_data)
+        
+        # Then
+        assert result.name == "Test User"
+        assert result.email == "test@example.com"
+        service.repository.get_by_email.assert_called_once_with("test@example.com")
+        service.repository.create.assert_called_once()
+    
+    async def test_create_user_email_already_exists(self):
+        """メールアドレス重複エラーテスト"""
+        # Given
+        mock_db = AsyncMock()
+        service = UserService(mock_db)
+        service.repository = AsyncMock()
+        
+        existing_user = User(id=1, email="test@example.com")
+        service.repository.get_by_email.return_value = existing_user
+        
+        user_data = CreateUserRequest(
+            name="Test User",
+            email="test@example.com",
+            password="password123"
+        )
+        
+        # When & Then
+        with pytest.raises(ValueError, match="Email already registered"):
+            await service.create_user(user_data)
+```
+
+### 統合テスト例
+```python
+# tests/test_user_controller.py
+import pytest
+from httpx import AsyncClient
+from app.models.user import User
+
+@pytest.mark.asyncio
+class TestUserController:
+    """ユーザーコントローラーテスト"""
+    
+    async def test_create_user(self, client: AsyncClient, db_session):
+        """ユーザー作成API テスト"""
+        # Given
+        user_data = {
+            "name": "Test User",
+            "email": "test@example.com",
+            "password": "password123",
+            "is_active": True
+        }
+        
+        # When
+        response = await client.post("/api/v1/users/", json=user_data)
+        
+        # Then
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Test User"
+        assert data["email"] == "test@example.com"
+        assert "id" in data
+        assert "password" not in data  # パスワードは返さない
+    
+    async def test_get_user_not_found(self, client: AsyncClient):
+        """存在しないユーザー取得テスト"""
+        # When
+        response = await client.get("/api/v1/users/999")
+        
+        # Then
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+```
+
+## コード品質・静的解析
+
+### ツール設定
+```toml
+# pyproject.toml
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "C",  # flake8-comprehensions
+    "B",  # flake8-bugbear
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+```
+
+### pre-commit 設定
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+      - id: black
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.1.3
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic, sqlalchemy]
+```
+
+## デプロイメント
+
+### Docker設定
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# システム依存関係
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python依存関係
+COPY pyproject.toml poetry.lock ./
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry install --only=main --no-dev
+
+# アプリケーションコード
+COPY app/ ./app/
+
+# ヘルスチェック
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# 実行
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 本番起動設定
+```bash
+# gunicorn + uvicorn
+gunicorn app.main:app \
+    -w 4 \
+    -k uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --access-logfile - \
+    --error-logfile -
+```
+
+---
+
+このPythonルールに従って開発することで、
+保守性が高く、Pythonic で高品質なバックエンドアプリケーションを構築できます。
